@@ -1,3 +1,4 @@
+#include "ChordInputState.h"
 #include "ChordDetector.h"
 #include "HarmonyAdvisor.h"
 
@@ -31,6 +32,21 @@ void expectName(const std::string& expected,
         std::exit(EXIT_FAILURE);
     }
 }
+
+void expectState(const chording::ChordInputState& state,
+                 const std::string& expectedName,
+                 const int expectedNoteCount)
+{
+    const auto snapshot = state.snapshot();
+    const auto chord = chording::ChordDetector::detect(snapshot.pitchClassMask, snapshot.bass);
+    const auto actualName = chording::ChordDetector::format(chord, false);
+    if (actualName != expectedName || snapshot.noteCount != expectedNoteCount)
+    {
+        std::cerr << "Expected state " << expectedName << " with " << expectedNoteCount
+                  << " notes, got " << actualName << " with " << snapshot.noteCount << " notes\n";
+        std::exit(EXIT_FAILURE);
+    }
+}
 }
 
 int main()
@@ -50,6 +66,28 @@ int main()
     expectName("C7#5", { 0, 4, 8, 10 }, 0);
     expectName("C7b9", { 0, 1, 4, 7, 10 }, 0);
     expectName("C7#9", { 0, 3, 4, 7, 10 }, 0);
+
+    chording::ChordInputState inputState;
+    inputState.noteOn(0, 60);
+    inputState.noteOn(0, 64);
+    inputState.noteOn(0, 67);
+    expectState(inputState, "C", 3);
+
+    inputState.sustainPedalChanged(0, true);
+    expectState(inputState, "C", 3);
+    inputState.noteOff(0, 60);
+    inputState.noteOff(0, 64);
+    inputState.noteOff(0, 67);
+    expectState(inputState, "--", 0);
+
+    inputState.noteOn(0, 62);
+    inputState.noteOn(0, 65);
+    inputState.noteOn(0, 69);
+    expectState(inputState, "Dm", 3);
+    inputState.sustainPedalChanged(0, false);
+    expectState(inputState, "Dm", 3);
+    inputState.clearChannel(0);
+    expectState(inputState, "--", 0);
 
     const auto singleNote = chording::ChordDetector::detect(mask({ 0 }), 0);
     if (singleNote.isValid())

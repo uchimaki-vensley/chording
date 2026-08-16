@@ -2,10 +2,10 @@
 
 #include <JuceHeader.h>
 
+#include "ChordInputState.h"
 #include "ChordDetector.h"
 #include "HarmonyAdvisor.h"
 
-#include <array>
 #include <atomic>
 #include <mutex>
 #include <vector>
@@ -74,9 +74,7 @@ private:
     static std::uint64_t encodeChord(const chording::ChordResult&) noexcept;
     static chording::ChordResult decodeChord(std::uint64_t) noexcept;
 
-    std::array<std::array<bool, 128>, 16> heldNotes_ {};
-    std::array<std::array<bool, 128>, 16> sustainedNotes_ {};
-    std::array<bool, 16> sustainPedal_ {};
+    chording::ChordInputState inputState_;
 
     std::atomic<std::uint64_t> publishedChord_ { 0 };
     std::atomic<std::uint64_t> noteOnRevision_ { 0 };

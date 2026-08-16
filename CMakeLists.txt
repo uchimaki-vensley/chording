@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Chording VERSION 0.1.0 LANGUAGES CXX)
+project(Chording VERSION 0.1.1 LANGUAGES CXX)
 
 option(CHORDING_BUILD_PLUGIN "Build the JUCE VST3 plugin" ON)
 option(CHORDING_BUILD_TESTS "Build the chord detector tests" ON)
@@ -37,6 +37,7 @@ if (CHORDING_BUILD_PLUGIN)
 
     target_sources(Chording
         PRIVATE
+            Source/ChordInputState.cpp
             Source/ChordDetector.cpp
             Source/HarmonyAdvisor.cpp
             Source/PluginEditor.cpp
@@ -71,6 +72,7 @@ endif()
 if (CHORDING_BUILD_TESTS)
     enable_testing()
     add_executable(ChordDetectorTests
+        Source/ChordInputState.cpp
         Source/ChordDetector.cpp
         Source/HarmonyAdvisor.cpp
         Tests/ChordDetectorTests.cpp

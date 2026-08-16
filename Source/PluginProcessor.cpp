@@ -21,15 +21,13 @@ ChordingAudioProcessor::~ChordingAudioProcessor()
 
 void ChordingAudioProcessor::prepareToPlay(double, int)
 {
-    for (int channel = 0; channel < 16; ++channel)
-        clearChannel(channel);
+    inputState_.clearAll();
     publishDetection();
 }
 
 void ChordingAudioProcessor::releaseResources()
 {
-    for (int channel = 0; channel < 16; ++channel)
-        clearChannel(channel);
+    inputState_.clearAll();
     publishDetection();
 }
 
@@ -59,32 +57,20 @@ void ChordingAudioProcessor::applyMidiMessage(const juce::MidiMessage& message) 
     const auto channel = std::clamp(message.getChannel() - 1, 0, 15);
     if (message.isNoteOn())
     {
-        const auto note = message.getNoteNumber();
-        heldNotes_[static_cast<std::size_t>(channel)][static_cast<std::size_t>(note)] = true;
-        sustainedNotes_[static_cast<std::size_t>(channel)][static_cast<std::size_t>(note)] = false;
+        inputState_.noteOn(channel, message.getNoteNumber());
         noteOnRevision_.fetch_add(1, std::memory_order_relaxed);
         return;
     }
 
     if (message.isNoteOff())
     {
-        const auto note = message.getNoteNumber();
-        heldNotes_[static_cast<std::size_t>(channel)][static_cast<std::size_t>(note)] = false;
-        sustainedNotes_[static_cast<std::size_t>(channel)][static_cast<std::size_t>(note)]
-            = sustainPedal_[static_cast<std::size_t>(channel)];
+        inputState_.noteOff(channel, message.getNoteNumber());
         return;
     }
 
     if (message.isController() && message.getControllerNumber() == 64)
     {
-        const auto down = message.getControllerValue() >= 64;
-        if (sustainPedal_[static_cast<std::size_t>(channel)] && ! down)
-        {
-            for (int note = 0; note < 128; ++note)
-                if (! heldNotes_[static_cast<std::size_t>(channel)][static_cast<std::size_t>(note)])
-                    sustainedNotes_[static_cast<std::size_t>(channel)][static_cast<std::size_t>(note)] = false;
-        }
-        sustainPedal_[static_cast<std::size_t>(channel)] = down;
+        inputState_.sustainPedalChanged(channel, message.getControllerValue() >= 64);
         return;
     }
 
@@ -94,33 +80,14 @@ void ChordingAudioProcessor::applyMidiMessage(const juce::MidiMessage& message) 
 
 void ChordingAudioProcessor::clearChannel(const int channel) noexcept
 {
-    heldNotes_[static_cast<std::size_t>(channel)].fill(false);
-    sustainedNotes_[static_cast<std::size_t>(channel)].fill(false);
-    sustainPedal_[static_cast<std::size_t>(channel)] = false;
+    inputState_.clearChannel(channel);
 }
 
 void ChordingAudioProcessor::publishDetection() noexcept
 {
-    std::uint16_t mask = 0;
-    auto bass = -1;
-    auto count = 0;
-    for (int note = 0; note < 128; ++note)
-    {
-        auto active = false;
-        for (int channel = 0; channel < 16; ++channel)
-            active = active
-                || heldNotes_[static_cast<std::size_t>(channel)][static_cast<std::size_t>(note)]
-                || sustainedNotes_[static_cast<std::size_t>(channel)][static_cast<std::size_t>(note)];
-        if (! active)
-            continue;
-        if (bass < 0)
-            bass = note % 12;
-        mask |= static_cast<std::uint16_t>(1u << (note % 12));
-        ++count;
-    }
-
-    const auto chord = chording::ChordDetector::detect(mask, bass);
-    activeNoteCount_.store(count, std::memory_order_relaxed);
+    const auto input = inputState_.snapshot();
+    const auto chord = chording::ChordDetector::detect(input.pitchClassMask, input.bass);
+    activeNoteCount_.store(input.noteCount, std::memory_order_relaxed);
     publishedChord_.store(encodeChord(chord), std::memory_order_release);
 }
 
