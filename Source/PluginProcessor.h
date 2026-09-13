@@ -2,10 +2,10 @@
 
 #include <JuceHeader.h>
 
+#include "ChordInputState.h"
 #include "ChordDetector.h"
 #include "HarmonyAdvisor.h"
 
-#include <array>
 #include <atomic>
 #include <mutex>
 #include <vector>
@@ -53,6 +53,8 @@ public:
 
     [[nodiscard]] chording::ChordResult getCurrentChord() const noexcept;
     [[nodiscard]] int getActiveNoteCount() const noexcept;
+    // MIDI Insert adapter publishes the same model without an audio processBlock.
+    void publishMidiInput(const chording::ChordInputSnapshot&, std::uint64_t noteOns) noexcept;
     [[nodiscard]] std::vector<chording::ChordResult> getProgression() const;
     [[nodiscard]] std::uint64_t getHistoryVersion() const noexcept;
     void clearProgression();
@@ -74,9 +76,7 @@ private:
     static std::uint64_t encodeChord(const chording::ChordResult&) noexcept;
     static chording::ChordResult decodeChord(std::uint64_t) noexcept;
 
-    std::array<std::array<bool, 128>, 16> heldNotes_ {};
-    std::array<std::array<bool, 128>, 16> sustainedNotes_ {};
-    std::array<bool, 16> sustainPedal_ {};
+    chording::ChordInputState inputState_;
 
     std::atomic<std::uint64_t> publishedChord_ { 0 };
     std::atomic<std::uint64_t> noteOnRevision_ { 0 };

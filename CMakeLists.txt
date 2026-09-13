@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Chording VERSION 0.1.0 LANGUAGES CXX)
+project(Chording VERSION 0.2.0 LANGUAGES CXX)
 
 option(CHORDING_BUILD_PLUGIN "Build the JUCE VST3 plugin" ON)
 option(CHORDING_BUILD_TESTS "Build the chord detector tests" ON)
+option(CHORDING_BUILD_MIDI_INSERT "Build the Windows Cubase MIDI Insert" ON)
 
 if (CHORDING_BUILD_PLUGIN)
     include(FetchContent)
@@ -37,6 +38,7 @@ if (CHORDING_BUILD_PLUGIN)
 
     target_sources(Chording
         PRIVATE
+            Source/ChordInputState.cpp
             Source/ChordDetector.cpp
             Source/HarmonyAdvisor.cpp
             Source/PluginEditor.cpp
@@ -66,11 +68,37 @@ if (CHORDING_BUILD_PLUGIN)
             juce::juce_recommended_lto_flags
             juce::juce_recommended_warning_flags
     )
+
+    if (CHORDING_BUILD_MIDI_INSERT AND WIN32 AND MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+        add_library(ChordingMidiInsert SHARED
+            Source/MidiInsert.cpp Source/MidiInsertState.cpp Source/MidiInsert.def)
+        target_include_directories(ChordingMidiInsert PRIVATE
+            Source
+            ThirdParty/vst-ma
+            ${JUCE_SOURCE_DIR}/modules
+            $<TARGET_PROPERTY:Chording,JUCE_GENERATED_SOURCES_DIRECTORY>
+        )
+        target_compile_features(ChordingMidiInsert PRIVATE cxx_std_20)
+        target_compile_options(ChordingMidiInsert PRIVATE /utf-8 /EHsc)
+        target_compile_definitions(ChordingMidiInsert PRIVATE WIN32 _CRT_SECURE_NO_WARNINGS)
+        target_link_libraries(ChordingMidiInsert PRIVATE Chording)
+    endif()
 endif()
 
 if (CHORDING_BUILD_TESTS)
     enable_testing()
+    if (TARGET ChordingMidiInsert)
+        add_executable(MidiInsertTests Tests/MidiInsertTests.cpp)
+        target_include_directories(MidiInsertTests PRIVATE ThirdParty/vst-ma)
+        target_compile_features(MidiInsertTests PRIVATE cxx_std_20)
+        target_compile_definitions(MidiInsertTests PRIVATE WIN32)
+        target_compile_options(MidiInsertTests PRIVATE /W4 /utf-8 /EHsc)
+        target_link_libraries(MidiInsertTests PRIVATE ChordingMidiInsert)
+        add_test(NAME MidiInsertTests COMMAND MidiInsertTests)
+    endif()
     add_executable(ChordDetectorTests
+        Source/ChordInputState.cpp
+        Source/MidiInsertState.cpp
         Source/ChordDetector.cpp
         Source/HarmonyAdvisor.cpp
         Tests/ChordDetectorTests.cpp
@@ -78,7 +106,7 @@ if (CHORDING_BUILD_TESTS)
     target_include_directories(ChordDetectorTests PRIVATE Source)
     target_compile_features(ChordDetectorTests PRIVATE cxx_std_20)
     if (MSVC)
-        target_compile_options(ChordDetectorTests PRIVATE /utf-8)
+        target_compile_options(ChordDetectorTests PRIVATE /utf-8 /EHsc)
     endif()
     add_test(NAME ChordDetectorTests COMMAND ChordDetectorTests)
 endif()
