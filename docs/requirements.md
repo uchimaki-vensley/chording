@@ -4,9 +4,11 @@
 
 - OS: Windows 11
 - ホスト: Cubase
-- 形式: VST3エフェクト
-- 入力: VST3ノートイベント
+- 形式: VST3エフェクト、およびCubase Artist 14用MIDI Insert
+- 入力: MIDIノートイベント
 - 音声処理: 解析しない。入力音声はそのまま出力する
+- MIDI Insertはインストゥルメントトラックに追加でき、別トラックへのMIDIルーティングを不要とする
+- MIDI Insertは受信したMIDIイベントを変更せず音源へ渡す
 
 ## コード認識
 

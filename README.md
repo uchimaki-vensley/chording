@@ -1,7 +1,7 @@
 # Chording
 
-Windows 11 / Cubase向けの、リアルタイムMIDIコード解析・コード進行支援VST3です。
-音声は解析せず、VST3のノートイベントだけを使用します。
+Windows 11 / Cubase向けの、リアルタイムMIDIコード解析・コード進行支援プラグインです。
+音声は解析せず、MIDIノートイベントだけを使用します。
 
 ## 現在の機能
 
@@ -50,6 +50,7 @@ ctest --test-dir build-core -C Release --output-on-failure
 
 ```text
 build/Chording_artefacts/Release/VST3/Chording.vst3
+build/Release/ChordingMidiInsert.dll
 ```
 
 `Chording.vst3`フォルダーを次へ配置し、CubaseのVSTプラグインマネージャーで
@@ -60,6 +61,14 @@ C:\Program Files\Common Files\VST3
 ```
 
 ## Cubaseでの接続
+
+Cubase Artist 14では、インストゥルメントトラックのInspectorにある「MIDI Inserts」へ
+`Chording MIDI`を追加します。追加のMIDIトラックやルーティングは不要です。通常の
+オーディオInsertsへ`Chording.vst3`を追加しても、その位置には押鍵MIDIが届きません。
+
+MIDI Insertのインストール方法は [Cubase Artist 14 MIDI Insert](docs/midi-insert.md) を参照してください。
+
+従来のVST3を使う場合は次のように接続します。
 
 1. オーディオトラック、グループ、またはFXチャンネルのInsertにChordingを追加します。
 2. MIDIトラックを追加し、その出力先にChordingを選びます。

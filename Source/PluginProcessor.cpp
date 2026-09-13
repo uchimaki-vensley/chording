@@ -85,7 +85,13 @@ void ChordingAudioProcessor::clearChannel(const int channel) noexcept
 
 void ChordingAudioProcessor::publishDetection() noexcept
 {
-    const auto input = inputState_.snapshot();
+    publishMidiInput(inputState_.snapshot(), 0);
+}
+
+void ChordingAudioProcessor::publishMidiInput(const chording::ChordInputSnapshot& input,
+                                            const std::uint64_t noteOns) noexcept
+{
+    noteOnRevision_.fetch_add(noteOns, std::memory_order_relaxed);
     const auto chord = chording::ChordDetector::detect(input.pitchClassMask, input.bass);
     activeNoteCount_.store(input.noteCount, std::memory_order_relaxed);
     publishedChord_.store(encodeChord(chord), std::memory_order_release);

@@ -1,6 +1,7 @@
 #include "ChordInputState.h"
 #include "ChordDetector.h"
 #include "HarmonyAdvisor.h"
+#include "MidiInsertState.h"
 
 #include <algorithm>
 #include <bit>
@@ -33,11 +34,10 @@ void expectName(const std::string& expected,
     }
 }
 
-void expectState(const chording::ChordInputState& state,
-                 const std::string& expectedName,
-                 const int expectedNoteCount)
+void expectStateFromSnapshot(const chording::ChordInputSnapshot& snapshot,
+                             const std::string& expectedName,
+                             const int expectedNoteCount)
 {
-    const auto snapshot = state.snapshot();
     const auto chord = chording::ChordDetector::detect(snapshot.pitchClassMask, snapshot.bass);
     const auto actualName = chording::ChordDetector::format(chord, false);
     if (actualName != expectedName || snapshot.noteCount != expectedNoteCount)
@@ -46,6 +46,13 @@ void expectState(const chording::ChordInputState& state,
                   << " notes, got " << actualName << " with " << snapshot.noteCount << " notes\n";
         std::exit(EXIT_FAILURE);
     }
+}
+
+void expectState(const chording::ChordInputState& state,
+                 const std::string& expectedName,
+                 const int expectedNoteCount)
+{
+    expectStateFromSnapshot(state.snapshot(), expectedName, expectedNoteCount);
 }
 }
 
@@ -88,6 +95,80 @@ int main()
     expectState(inputState, "Dm", 3);
     inputState.clearChannel(0);
     expectState(inputState, "--", 0);
+
+    // Both pedal states must give the same results, including held notes shared
+    // by channels and partial release of a chord.
+    for (const bool pedalDown : {false, true})
+    {
+        chording::ChordInputState state;
+        state.sustainPedalChanged(0, pedalDown);
+        state.noteOn(0, 60);
+        state.noteOn(0, 64);
+        state.noteOn(0, 67);
+        state.noteOn(1, 60);
+        expectState(state, "C", 3);
+        state.noteOff(0, 60);
+        expectState(state, "C", 3);
+        state.noteOff(1, 60);
+        if (state.snapshot().pitchClassMask != mask({64, 67}) || state.snapshot().bass != 4)
+            return EXIT_FAILURE;
+        state.noteOff(0, 64);
+        state.noteOff(0, 67);
+        expectState(state, "--", 0);
+        state.noteOn(0, 62);
+        state.noteOn(0, 65);
+        state.noteOn(0, 69);
+        expectState(state, "Dm", 3);
+        state.clearAll();
+        expectState(state, "--", 0);
+    }
+
+    // Cubase MIDI Inserts expose live notes as immediate note on/off events.
+    chording::MidiInsertState midiInsert;
+    midiInsert.receive(0x90, 0, 60, 100, 0, 0, true);
+    midiInsert.receive(0x90, 0, 64, 100, 0, -1, true);
+    midiInsert.receive(0x90, 0, 67, 100, 0, -1, true);
+    expectStateFromSnapshot(midiInsert.snapshot(), "C", 3);
+    if (midiInsert.takeNoteOns() != 3 || midiInsert.takeNoteOns() != 0)
+        return EXIT_FAILURE;
+    midiInsert.receive(0xb0, 0, 64, 127, 0, 0, true);
+    expectStateFromSnapshot(midiInsert.snapshot(), "C", 3);
+    midiInsert.receive(0x80, 0, 60, 0, 0, -1, true);
+    midiInsert.receive(0x90, 0, 64, 0, 0, -1, true);
+    midiInsert.receive(0x80, 0, 67, 0, 0, -1, true);
+    expectStateFromSnapshot(midiInsert.snapshot(), "--", 0);
+
+    // Cubase can use -1 for "Any" channel and can expose a live event without
+    // the immediate flag while its note length is still pending.
+    midiInsert.receive(0x90, -1, 60, 100, 0, -1, false);
+    midiInsert.receive(0x90, -1, 64, 100, 0, -1, false);
+    midiInsert.receive(0x90, -1, 67, 100, 0, -1, false);
+    expectStateFromSnapshot(midiInsert.snapshot(), "C", 3);
+    midiInsert.receive(0x80, -1, 60, 0, 0, 0, false);
+    midiInsert.receive(0x80, -1, 64, 0, 0, 0, false);
+    midiInsert.receive(0x80, -1, 67, 0, 0, 0, false);
+    expectStateFromSnapshot(midiInsert.snapshot(), "--", 0);
+
+    // Recorded notes arrive with PPQ start and duration. The detector follows
+    // the scheduled starts/ends while the original event continues to the synth.
+    midiInsert.receive(0x90, 0, 62, 100, 100, 100, false);
+    midiInsert.receive(0x90, 0, 65, 100, 100, 100, false);
+    midiInsert.receive(0x90, 0, 69, 100, 100, 100, false);
+    midiInsert.advance(100, false);
+    expectStateFromSnapshot(midiInsert.snapshot(), "--", 0);
+    midiInsert.advance(101, false);
+    expectStateFromSnapshot(midiInsert.snapshot(), "Dm", 3);
+    midiInsert.advance(201, false);
+    expectStateFromSnapshot(midiInsert.snapshot(), "--", 0);
+    midiInsert.receive(0x90, 0, 60, 100, 300, 100, false);
+    midiInsert.receive(0xb0, 0, 123, 0, 350, 0, false);
+    midiInsert.advance(301, false);
+    if (midiInsert.snapshot().noteCount != 1)
+        return EXIT_FAILURE;
+    midiInsert.advance(351, false);
+    expectStateFromSnapshot(midiInsert.snapshot(), "--", 0);
+    midiInsert.clear();
+    expectStateFromSnapshot(midiInsert.snapshot(), "--", 0);
 
     const auto singleNote = chording::ChordDetector::detect(mask({ 0 }), 0);
     if (singleNote.isValid())

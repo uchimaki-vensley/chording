@@ -53,6 +53,8 @@ public:
 
     [[nodiscard]] chording::ChordResult getCurrentChord() const noexcept;
     [[nodiscard]] int getActiveNoteCount() const noexcept;
+    // MIDI Insert adapter publishes the same model without an audio processBlock.
+    void publishMidiInput(const chording::ChordInputSnapshot&, std::uint64_t noteOns) noexcept;
     [[nodiscard]] std::vector<chording::ChordResult> getProgression() const;
     [[nodiscard]] std::uint64_t getHistoryVersion() const noexcept;
     void clearProgression();
