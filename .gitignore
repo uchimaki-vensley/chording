@@ -1,6 +1,7 @@
 /build/
 /build-*/
 /cmake-build-*/
+/dist/
 /.vs/
 /.idea/
 *.user
