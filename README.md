@@ -36,7 +36,7 @@ Cubase Artist 14では、インストゥルメントトラックの**MIDI Insert
 - Git
 - 初回構成時にJUCE 8.0.13を取得するためのインターネット接続
 
-JUCEの利用条件は[JUCE License](https://juce.com/legal/)を確認してください。Cubase MIDI Insert用として同梱しているSteinberg VST Module Architectureヘッダーのライセンスは[ThirdParty/vst-ma/LICENSE.txt](ThirdParty/vst-ma/LICENSE.txt)にあります。
+公式ビルドはJUCEをAGPLv3で使用します。JUCEと同梱SDKを含む第三者ソフトウェアの条件は[Third-party notices](THIRD_PARTY_NOTICES.md)を確認してください。
 
 ## ビルド
 
@@ -114,3 +114,22 @@ Source/PluginEditor.*       プラグインUI
 Tests/                      解析コアとMIDI Insertのテスト
 ThirdParty/vst-ma/          Steinberg VST-MAインターフェース
 ```
+
+## Releaseパッケージ
+
+Releaseでは、MIDI Insert版とVST3版を別々のZIPで配布します。どちらにもライセンス本文と第三者ライセンスを同梱し、同じReleaseに対応ソースZIPと`SHA256SUMS.txt`を添付します。
+
+ビルド・テスト後、クリーンなチェックアウトで次を実行すると`dist`に配布ファイルが生成されます。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 `
+  -BuildDirectory build -OutputDirectory dist
+```
+
+詳細は[Release procedure](docs/releasing.md)を参照してください。
+
+## ライセンス
+
+Chordingは[GNU Affero General Public License v3.0 only](LICENSE)で公開します。利用、改変、再配布を行う場合はAGPLv3の条件に従ってください。第三者ソフトウェアの著作権表示とライセンスは[Third-party notices](THIRD_PARTY_NOTICES.md)にまとめています。
+
+コントリビューションの扱いは[CONTRIBUTING.md](CONTRIBUTING.md)を参照してください。

@@ -12,8 +12,8 @@ if (CHORDING_BUILD_PLUGIN)
     FetchContent_Declare(
         JUCE
         GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-        GIT_TAG 8.0.13
-        GIT_SHALLOW TRUE
+        # JUCE 8.0.13, pinned to an immutable commit for reproducible builds.
+        GIT_TAG 7c9d3783b127263d72bb65fe0a7e2dc8a02a7ac2
     )
     FetchContent_MakeAvailable(JUCE)
 

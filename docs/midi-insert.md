@@ -28,8 +28,10 @@ build/Release/ChordingMidiInsert.dll
 ## Install and use
 
 1. Close Cubase.
-2. Copy `ChordingMidiInsert.dll` and `ThirdParty/vst-ma/LICENSE.txt` into a
-   dedicated directory under `C:\Program Files\Steinberg\Cubase 14\Components`.
+2. For a source build, copy `ChordingMidiInsert.dll` as `ChordingMidi.dll` and
+   include `ThirdParty/vst-ma/LICENSE.txt` in a dedicated directory under
+   `C:\Program Files\Steinberg\Cubase 14\Components`. The release package
+   already uses the `ChordingMidi.dll` name and includes all license files.
 3. Start Cubase and select the instrument track.
 4. Open **MIDI Inserts** in the Inspector and select **Chording MIDI**.
 5. Click its edit button to open the Chording display.
