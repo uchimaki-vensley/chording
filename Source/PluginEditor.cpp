@@ -12,6 +12,9 @@ const auto textMuted = juce::Colour::fromRGB(157, 163, 162);
 const auto mint = juce::Colour::fromRGB(79, 211, 180);
 const auto amber = juce::Colour::fromRGB(242, 180, 82);
 const auto coral = juce::Colour::fromRGB(239, 116, 101);
+// Recommendation levels use a blue scale so they stay apart from the mint
+// selection highlight and the amber/coral role labels.
+const auto recommend = juce::Colour::fromRGB(102, 156, 255);
 
 template <std::size_t size>
 juce::String utf8(const char8_t (&text)[size])
@@ -23,6 +26,40 @@ juce::String utf8(const char8_t (&text)[size])
 juce::Font font(const float size, const int style = juce::Font::plain)
 {
     return juce::Font(juce::FontOptions("Yu Gothic UI", size, style));
+}
+
+// Shrinks the font just enough for the text to fit on one line, so long chord
+// names are never truncated or squashed.
+juce::Font fittedFont(const juce::String& text, const float size, const float maxWidth,
+                      const int style = juce::Font::plain)
+{
+    const auto nominal = font(size, style);
+    const auto width = juce::GlyphArrangement::getStringWidth(nominal, text);
+    if (width <= maxWidth || width <= 0.0f)
+        return nominal;
+    return font(size * maxWidth / width * 0.98f, style);
+}
+
+struct LevelStyle
+{
+    juce::Colour bar;
+    juce::Colour fill;
+    juce::Colour name;
+};
+
+LevelStyle levelStyle(const chording::RecommendationLevel level)
+{
+    switch (level)
+    {
+        case chording::RecommendationLevel::high:
+            return { recommend, recommend.withAlpha(0.3f), textPrimary };
+        case chording::RecommendationLevel::medium:
+            return { recommend.withAlpha(0.55f), recommend.withAlpha(0.11f), textPrimary.withAlpha(0.86f) };
+        case chording::RecommendationLevel::low:
+        case chording::RecommendationLevel::none:
+            break;
+    }
+    return { juce::Colour::fromRGB(74, 80, 81), juce::Colours::transparentBlack, textMuted };
 }
 
 void drawPanel(juce::Graphics& graphics, const juce::Rectangle<int> bounds)
@@ -77,8 +114,8 @@ ChordingAudioProcessorEditor::ChordingAudioProcessorEditor(ChordingAudioProcesso
     setLookAndFeel(&lookAndFeel_);
     setOpaque(true);
     setResizable(true, true);
-    setResizeLimits(900, 560, 1200, 820);
-    setSize(940, 620);
+    setResizeLimits(minimumWidth, minimumHeight, maximumWidth, maximumHeight);
+    setSize(defaultWidth, defaultHeight);
 
     for (auto* combo : { &keyBox_, &styleBox_, &moodBox_ })
     {
@@ -216,6 +253,7 @@ void ChordingAudioProcessorEditor::refreshModel()
     suggestions_ = chording::HarmonyAdvisor::suggest(sourceChord, effectiveKey_, settings_.style,
                                                       settings_.mood, settings_.includeBorrowed,
                                                       progression_);
+    recommendationLevels_ = chording::HarmonyAdvisor::recommendationLevels(suggestions_);
     repaint();
 }
 
@@ -225,13 +263,13 @@ void ChordingAudioProcessorEditor::resized()
     header.removeFromLeft(190);
 
     auto keyArea = header.removeFromLeft(206).reduced(0, 14);
-    keyArea.removeFromLeft(34);
+    keyLabelArea_ = keyArea.removeFromLeft(34);
     keyBox_.setBounds(keyArea);
     auto styleArea = header.removeFromLeft(174).reduced(0, 14);
-    styleArea.removeFromLeft(48);
+    styleLabelArea_ = styleArea.removeFromLeft(48);
     styleBox_.setBounds(styleArea);
     auto moodArea = header.removeFromLeft(160).reduced(0, 14);
-    moodArea.removeFromLeft(44);
+    moodLabelArea_ = moodArea.removeFromLeft(44);
     moodBox_.setBounds(moodArea);
     notationButton_.setBounds(header.removeFromRight(76).reduced(0, 14));
 
@@ -257,30 +295,35 @@ void ChordingAudioProcessorEditor::paint(juce::Graphics& graphics)
     graphics.setColour(textMuted);
     graphics.setFont(font(10.0f, juce::Font::bold));
     graphics.drawText("MIDI HARMONY GUIDE", 24, 36, 160, 16, juce::Justification::centredLeft);
-    graphics.drawText(utf8(u8"キー"), 190, 21, 38, 22, juce::Justification::centredLeft);
-    graphics.drawText(utf8(u8"スタイル"), 396, 21, 52, 22, juce::Justification::centredLeft);
-    graphics.drawText(utf8(u8"印象"), 570, 21, 44, 22, juce::Justification::centredLeft);
+    graphics.drawText(utf8(u8"キー"), keyLabelArea_, juce::Justification::centredLeft);
+    graphics.drawText(utf8(u8"スタイル"), styleLabelArea_, juce::Justification::centredLeft);
+    graphics.drawText(utf8(u8"印象"), moodLabelArea_, juce::Justification::centredLeft);
 
     auto content = bounds.reduced(24, 0);
     content.removeFromTop(72);
     content.removeFromBottom(64);
-    auto left = content.removeFromLeft(std::clamp(content.getWidth() * 34 / 100, 280, 350));
+    auto left = content.removeFromLeft(std::clamp(content.getWidth() * 44 / 100, 420, 520));
     content.removeFromLeft(14);
     auto right = content;
     drawPanel(graphics, left);
 
     graphics.setColour(textMuted);
-    graphics.setFont(font(12.0f, juce::Font::bold));
+    graphics.setFont(font(13.0f, juce::Font::bold));
     graphics.drawText(utf8(u8"現在のコード"), left.getX() + 20, left.getY() + 16,
                       left.getWidth() - 40, 22, juce::Justification::centredLeft);
+
+    // At least 88px tall for typical names; only names wider than the panel shrink.
+    const auto chordFontSize = std::clamp(static_cast<float>(left.getWidth()) * 0.2f, 88.0f, 104.0f);
+    const auto currentName = chordName(currentChord_, settings_.preferFlats);
+    const auto nameArea = juce::Rectangle<int>(left.getX() + 20, left.getY() + 44, left.getWidth() - 40,
+                                               static_cast<int>(chordFontSize) + 16);
     graphics.setColour(currentChord_.isValid() ? mint : textMuted);
-    graphics.setFont(font(std::min(62.0f, static_cast<float>(left.getWidth()) * 0.18f), juce::Font::bold));
-    graphics.drawFittedText(chordName(currentChord_, settings_.preferFlats),
-                            left.reduced(20).withY(left.getY() + 52).withHeight(82),
-                            juce::Justification::centredLeft, 1);
+    graphics.setFont(fittedFont(currentName, chordFontSize, static_cast<float>(nameArea.getWidth()),
+                                juce::Font::bold));
+    graphics.drawText(currentName, nameArea, juce::Justification::centredLeft, false);
 
     graphics.setColour(textMuted);
-    graphics.setFont(font(12.0f));
+    graphics.setFont(font(14.0f));
     auto alternativeText = utf8(u8"別解  ");
     auto alternativeCount = 0;
     for (std::size_t index = 1; index < alternatives_.size(); ++index)
@@ -291,11 +334,11 @@ void ChordingAudioProcessorEditor::paint(juce::Graphics& graphics)
         alternativeText += chordName(alternatives_[index], settings_.preferFlats);
     }
     graphics.drawFittedText(alternativeCount == 0 ? utf8(u8"別解  --") : alternativeText,
-                            left.getX() + 20, left.getY() + 142, left.getWidth() - 40, 22,
+                            left.getX() + 20, nameArea.getBottom() + 6, left.getWidth() - 40, 24,
                             juce::Justification::centredLeft, 1);
 
     const auto confidence = currentChord_.isValid() ? currentChord_.confidence : 0.0f;
-    auto meter = juce::Rectangle<int>(left.getX() + 20, left.getY() + 184, left.getWidth() - 40, 5);
+    auto meter = juce::Rectangle<int>(left.getX() + 20, nameArea.getBottom() + 48, left.getWidth() - 40, 5);
     graphics.setColour(panelRaised);
     graphics.fillRoundedRectangle(meter.toFloat(), 2.0f);
     graphics.setColour(amber);
@@ -327,7 +370,8 @@ void ChordingAudioProcessorEditor::paint(juce::Graphics& graphics)
                       left.getX() + 20, keyboard.getBottom() + 12, left.getWidth() - 40, 20,
                       juce::Justification::centredLeft);
 
-    auto historyPanel = right.removeFromTop(std::max(142, right.getHeight() * 32 / 100));
+    // Suggestions get the remaining height so all six rows stay large without scrolling.
+    auto historyPanel = right.removeFromTop(std::clamp(right.getHeight() * 30 / 100, 142, 220));
     right.removeFromTop(14);
     auto suggestionsPanel = right;
     drawPanel(graphics, historyPanel);
@@ -378,6 +422,30 @@ void ChordingAudioProcessorEditor::paint(juce::Graphics& graphics)
     graphics.setFont(font(14.0f, juce::Font::bold));
     graphics.drawText(utf8(u8"次の候補"), suggestionsPanel.getX() + 18, suggestionsPanel.getY() + 13,
                       100, 22, juce::Justification::centredLeft);
+
+    auto legend = juce::Rectangle<int>(suggestionsPanel.getX() + 110, suggestionsPanel.getY() + 13, 190, 22);
+    graphics.setColour(textMuted);
+    graphics.setFont(font(11.0f, juce::Font::bold));
+    graphics.drawText(utf8(u8"おすすめ度"), legend.removeFromLeft(64), juce::Justification::centredLeft);
+    legend.removeFromLeft(6);
+    constexpr std::array legendLevels {
+        chording::RecommendationLevel::high,
+        chording::RecommendationLevel::medium,
+        chording::RecommendationLevel::low
+    };
+    for (const auto level : legendLevels)
+    {
+        auto item = legend.removeFromLeft(40);
+        const auto style = levelStyle(level);
+        graphics.setColour(style.bar);
+        graphics.fillRoundedRectangle(item.removeFromLeft(10).withSizeKeepingCentre(10, 10).toFloat(), 2.0f);
+        item.removeFromLeft(4);
+        graphics.setColour(style.name);
+        graphics.drawText(level == chording::RecommendationLevel::high ? utf8(u8"高")
+                          : level == chording::RecommendationLevel::medium ? utf8(u8"中") : utf8(u8"低"),
+                          item, juce::Justification::centredLeft);
+    }
+
     graphics.setColour(settings_.automaticKey ? amber : mint);
     graphics.setFont(font(11.0f, juce::Font::bold));
     const auto keyPrefix = settings_.automaticKey ? utf8(u8"推定キー  ") : utf8(u8"固定キー  ");
@@ -385,29 +453,45 @@ void ChordingAudioProcessorEditor::paint(juce::Graphics& graphics)
                       suggestionsPanel.getRight() - 190, suggestionsPanel.getY() + 13,
                       172, 22, juce::Justification::centredRight);
 
-    const auto rowsTop = suggestionsPanel.getY() + 43;
+    const auto rowsTop = suggestionsPanel.getY() + 46;
     const auto availableHeight = suggestionsPanel.getBottom() - rowsTop - 12;
-    const auto rowHeight = std::clamp(availableHeight / 6, 29, 40);
+    const auto rowHeight = std::clamp(availableHeight / 6, 44, 96);
+    const auto suggestionFontSize = std::clamp(static_cast<float>(rowHeight) * 0.5f, 22.0f, 40.0f);
+    const auto nameWidth = std::max(150, static_cast<int>(suggestionFontSize * 5.2f));
     for (std::size_t index = 0; index < suggestions_.size(); ++index)
     {
         auto row = juce::Rectangle<int>(suggestionsPanel.getX() + 12,
                                         rowsTop + static_cast<int>(index) * rowHeight,
-                                        suggestionsPanel.getWidth() - 24, rowHeight - 3);
+                                        suggestionsPanel.getWidth() - 24, rowHeight - 4);
         suggestionRows_[index] = row;
         const auto selected = static_cast<int>(index) == selectedSuggestion_;
-        graphics.setColour(selected ? mint.withAlpha(0.16f) : panelRaised);
+        const auto style = levelStyle(recommendationLevels_[index]);
+        graphics.setColour(panelRaised);
         graphics.fillRoundedRectangle(row.toFloat(), 4.0f);
-        graphics.setColour(selected ? mint : textPrimary);
-        graphics.setFont(font(14.0f, juce::Font::bold));
-        graphics.drawFittedText(chordName(suggestions_[index].chord, settings_.preferFlats),
-                                row.getX() + 10, row.getY(), 92, row.getHeight(),
-                                juce::Justification::centredLeft, 1);
+        graphics.setColour(selected ? mint.withAlpha(0.16f) : style.fill);
+        graphics.fillRoundedRectangle(row.toFloat(), 4.0f);
+        if (selected)
+        {
+            graphics.setColour(mint);
+            graphics.drawRoundedRectangle(row.toFloat().reduced(0.75f), 4.0f, 1.5f);
+        }
+        graphics.setColour(style.bar);
+        graphics.fillRoundedRectangle(row.withWidth(6).reduced(0, 6).translated(4, 0).toFloat(), 2.0f);
+
+        const auto suggestionName = chordName(suggestions_[index].chord, settings_.preferFlats);
+        graphics.setColour(selected ? mint : style.name);
+        graphics.setFont(fittedFont(suggestionName, suggestionFontSize, static_cast<float>(nameWidth),
+                                    juce::Font::bold));
+        graphics.drawText(suggestionName, row.getX() + 18, row.getY(), nameWidth, row.getHeight(),
+                          juce::Justification::centredLeft, false);
+
+        const auto roleX = row.getX() + 18 + nameWidth + 8;
         graphics.setColour(suggestions_[index].role == chording::HarmonicRole::borrowed ? coral : amber);
-        graphics.setFont(font(11.0f, juce::Font::bold));
-        graphics.drawText(roleText(suggestions_[index].role), row.getX() + 108, row.getY(),
-                          62, row.getHeight(), juce::Justification::centredLeft);
+        graphics.setFont(font(13.0f, juce::Font::bold));
+        graphics.drawText(roleText(suggestions_[index].role), roleX, row.getY(),
+                          64, row.getHeight(), juce::Justification::centredLeft);
         graphics.setColour(textMuted);
-        graphics.setFont(font(11.0f));
+        graphics.setFont(font(13.0f));
         const auto detail = selected
             ? utf8(u8"構成音  ") + pitchList(suggestions_[index].chord.pitchClassMask, settings_.preferFlats)
             : (suggestions_[index].role == chording::HarmonicRole::dominant ? utf8(u8"解決へ向かう緊張感")
@@ -415,7 +499,7 @@ void ChordingAudioProcessorEditor::paint(juce::Graphics& graphics)
                : suggestions_[index].role == chording::HarmonicRole::borrowed ? utf8(u8"キー外の響きを加える")
                : suggestions_[index].role == chording::HarmonicRole::relative ? utf8(u8"共通音の多い移動")
                : utf8(u8"安定した着地点"));
-        graphics.drawFittedText(detail, row.getX() + 174, row.getY(), row.getWidth() - 184,
+        graphics.drawFittedText(detail, roleX + 72, row.getY(), row.getRight() - 10 - (roleX + 72),
                                 row.getHeight(), juce::Justification::centredLeft, 1);
     }
 

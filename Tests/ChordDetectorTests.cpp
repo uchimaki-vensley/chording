@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <string>
 
 namespace
@@ -261,9 +262,79 @@ int main()
                                                 < allSuggestions[index].score))
                             return EXIT_FAILURE;
                     }
+
+                    const auto levels = chording::HarmonyAdvisor::recommendationLevels(allSuggestions);
+                    if (levels[0] != chording::RecommendationLevel::high)
+                    {
+                        std::cerr << "Expected the top suggestion to be highly recommended\n";
+                        return EXIT_FAILURE;
+                    }
+                    for (std::size_t index = 1; index < levels.size(); ++index)
+                    {
+                        if (levels[index] == chording::RecommendationLevel::none
+                            || levels[index - 1] < levels[index]
+                            || (allSuggestions[index - 1].score == allSuggestions[index].score
+                                && levels[index - 1] != levels[index]))
+                        {
+                            std::cerr << "Expected recommendation levels to follow the ranking\n";
+                            return EXIT_FAILURE;
+                        }
+                    }
                 }
             }
         }
+    }
+
+    using chording::RecommendationLevel;
+    const auto levelsFor = [](const std::array<float, 6>& scores)
+    {
+        std::array<chording::ChordSuggestion, 6> list {};
+        for (std::size_t index = 0; index < scores.size(); ++index)
+            list[index] = { { static_cast<int>(index), static_cast<int>(index),
+                              chording::ChordQuality::major, 0, 1.0f },
+                            chording::HarmonicRole::tonic, scores[index] };
+        return chording::HarmonyAdvisor::recommendationLevels(list);
+    };
+    const auto expectLevels = [&](const std::array<float, 6>& scores,
+                                  const std::array<RecommendationLevel, 6>& expected,
+                                  const char* label)
+    {
+        if (levelsFor(scores) == expected)
+            return true;
+        std::cerr << "Unexpected recommendation levels: " << label << '\n';
+        return false;
+    };
+
+    constexpr auto high = RecommendationLevel::high;
+    constexpr auto medium = RecommendationLevel::medium;
+    constexpr auto low = RecommendationLevel::low;
+    if (! expectLevels({ 12.0f, 11.5f, 8.0f, 7.0f, 4.0f, 3.0f },
+                       { high, high, medium, medium, low, low }, "three tiers")
+        || ! expectLevels({ 112.0f, 111.5f, 108.0f, 107.0f, 104.0f, 103.0f },
+                          { high, high, medium, medium, low, low }, "shifted scores")
+        || ! expectLevels({ 9.0f, 9.0f, 9.0f, 9.0f, 9.0f, 9.0f },
+                          { high, high, high, high, high, high }, "all tied")
+        || ! expectLevels({ 10.0f, 9.9f, 9.8f, 9.7f, 9.6f, 9.5f },
+                          { high, high, high, high, medium, medium }, "narrow spread")
+        || ! expectLevels({ 20.0f, 6.0f, 5.5f, 5.0f, 4.5f, 4.0f },
+                          { high, low, low, low, low, low }, "single standout"))
+        return EXIT_FAILURE;
+
+    auto partial = std::array<chording::ChordSuggestion, 6> {};
+    partial[0] = { { 0, 0, chording::ChordQuality::major, 0, 1.0f },
+                   chording::HarmonicRole::tonic, 10.0f };
+    partial[1] = { { 7, 7, chording::ChordQuality::major, 0, 1.0f },
+                   chording::HarmonicRole::dominant, 4.0f };
+    partial[2].score = 20.0f;
+    partial[3] = { { 5, 5, chording::ChordQuality::major, 0, 1.0f },
+                   chording::HarmonicRole::predominant,
+                   -std::numeric_limits<float>::infinity() };
+    const auto partialLevels = chording::HarmonyAdvisor::recommendationLevels(partial);
+    if (partialLevels != std::array { high, low, RecommendationLevel::none, RecommendationLevel::none,
+                                      RecommendationLevel::none, RecommendationLevel::none })
+    {
+        std::cerr << "Expected unusable suggestions to have no recommendation level\n";
+        return EXIT_FAILURE;
     }
 
     std::cout << "ChordDetector tests passed\n";

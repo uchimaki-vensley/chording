@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
 #include <limits>
 
 namespace chording
@@ -194,6 +195,40 @@ KeySignature HarmonyAdvisor::estimateKey(const std::span<const ChordResult> hist
 
     best.confidence = std::clamp((bestScore - secondScore + 1.0f) / 6.0f, 0.0f, 1.0f);
     return best;
+}
+
+std::array<RecommendationLevel, 6> HarmonyAdvisor::recommendationLevels(
+    const std::array<ChordSuggestion, 6>& suggestions) noexcept
+{
+    const auto usable = [](const ChordSuggestion& suggestion)
+    {
+        return suggestion.chord.isValid() && std::isfinite(suggestion.score);
+    };
+
+    auto top = -std::numeric_limits<float>::infinity();
+    auto bottom = std::numeric_limits<float>::infinity();
+    for (const auto& suggestion : suggestions)
+    {
+        if (! usable(suggestion))
+            continue;
+        top = std::max(top, suggestion.score);
+        bottom = std::min(bottom, suggestion.score);
+    }
+
+    // Levels depend only on the distance from the top score, normalised by the
+    // spread of this list, because absolute scores shift with style and mood.
+    const auto spread = std::max(top - bottom, minimumRecommendationSpread);
+    std::array<RecommendationLevel, 6> levels {};
+    for (std::size_t index = 0; index < suggestions.size(); ++index)
+    {
+        if (! usable(suggestions[index]))
+            continue;
+        const auto distance = (top - suggestions[index].score) / spread;
+        levels[index] = distance <= 1.0f / 3.0f ? RecommendationLevel::high
+            : distance <= 2.0f / 3.0f ? RecommendationLevel::medium
+            : RecommendationLevel::low;
+    }
+    return levels;
 }
 
 std::array<ChordSuggestion, 6> HarmonyAdvisor::suggest(

@@ -11,6 +11,13 @@ class ChordingAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                            private juce::Timer
 {
 public:
+    static constexpr int defaultWidth = 1100;
+    static constexpr int defaultHeight = 720;
+    static constexpr int minimumWidth = 1000;
+    static constexpr int minimumHeight = 660;
+    static constexpr int maximumWidth = 1600;
+    static constexpr int maximumHeight = 1040;
+
     explicit ChordingAudioProcessorEditor(ChordingAudioProcessor&);
     ~ChordingAudioProcessorEditor() override;
 
@@ -57,9 +64,13 @@ private:
     std::array<chording::ChordResult, 3> alternatives_ {};
     std::vector<chording::ChordResult> progression_;
     std::array<chording::ChordSuggestion, 6> suggestions_ {};
+    std::array<chording::RecommendationLevel, 6> recommendationLevels_ {};
     chording::KeySignature effectiveKey_;
     ChordingAudioProcessor::Settings settings_;
     std::array<juce::Rectangle<int>, 6> suggestionRows_ {};
+    juce::Rectangle<int> keyLabelArea_;
+    juce::Rectangle<int> styleLabelArea_;
+    juce::Rectangle<int> moodLabelArea_;
     int selectedSuggestion_ = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ChordingAudioProcessorEditor)

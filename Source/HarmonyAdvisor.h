@@ -34,9 +34,18 @@ struct ChordSuggestion
     float score = 0.0f;
 };
 
+// How strongly a suggestion is recommended relative to the others in the same list.
+enum class RecommendationLevel : std::uint8_t { none, low, medium, high };
+
 class HarmonyAdvisor
 {
 public:
+    // A list whose scores span less than this is graded as if it spanned this much,
+    // so tiny differences between near-equal candidates do not split the levels.
+    static constexpr float minimumRecommendationSpread = 1.0f;
+
+    [[nodiscard]] static std::array<RecommendationLevel, 6> recommendationLevels(
+        const std::array<ChordSuggestion, 6>& suggestions) noexcept;
     [[nodiscard]] static KeySignature estimateKey(std::span<const ChordResult> history) noexcept;
     [[nodiscard]] static std::array<ChordSuggestion, 6> suggest(
         const ChordResult& current,
