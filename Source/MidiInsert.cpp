@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 #include "MidiInsertState.h"
 #include "pluginterfaces/midi/imidieffect.h"
 #include "pluginterfaces/gui/iplugui.h"
@@ -56,7 +57,8 @@ public:
         {
             editor_.reset(model_->processor.createEditor());
             editor_->setResizable(false, false);
-            editor_->setSize(940, 620);
+            editor_->setSize(ChordingAudioProcessorEditor::defaultWidth,
+                             ChordingAudioProcessorEditor::defaultHeight);
             editor_->addToDesktop(0, parent);
             editor_->setVisible(true);
             return kResultOk;
@@ -157,7 +159,9 @@ public:
     tresult PLUGIN_API getEditorSize(const char*, ViewRect* rect) override
     {
         if (!rect) return kInvalidArgument;
-        *rect = ViewRect(0, 0, 940, 620); return kResultOk;
+        *rect = ViewRect(0, 0, ChordingAudioProcessorEditor::defaultWidth,
+                         ChordingAudioProcessorEditor::defaultHeight);
+        return kResultOk;
     }
     tresult PLUGIN_API createEditor(const char*, ViewRect*, IPlugView** view) override
     {

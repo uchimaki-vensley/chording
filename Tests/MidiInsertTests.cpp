@@ -107,7 +107,7 @@ int main()
     auto* editorFactory = static_cast<IEditorFactory*>(editorObject);
     ViewRect editorSize;
     expect(editorFactory->getEditorSize("editor", &editorSize) == kResultOk);
-    expect(editorSize.right == 940 && editorSize.bottom == 620);
+    expect(editorSize.right == 1100 && editorSize.bottom == 720);
     IPlugView* view = nullptr;
     expect(editorFactory->createEditor("editor", &editorSize, &view) == kResultOk && view != nullptr);
     expect(view->release() == 0);
